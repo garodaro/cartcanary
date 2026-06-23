@@ -3,6 +3,7 @@ import { PageAnalysisResult, PageSignals, ScreenshotSet } from "@/lib/reportLogi
 
 const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_LINKS = 24;
+const TEXT_SCAN_TIMEOUT_MS = 10000;
 
 type BrowserLike = {
   newContext: (...args: unknown[]) => Promise<{
@@ -97,6 +98,42 @@ export async function analyzePublicStore(rawUrl: string): Promise<PageAnalysisRe
   }
 }
 
+export async function analyzePublicStoreTextOnly(
+  rawUrl: string,
+  browserFailure?: unknown,
+): Promise<PageAnalysisResult> {
+  const normalizedUrl = normalizePublicUrl(rawUrl);
+  const homepage = await fetchPageSignals(normalizedUrl);
+  let productPage: PageSignals | undefined;
+  const productUrl = findLikelyProductUrl(homepage);
+  const warnings = [
+    `Browser screenshot scan failed, so CartCanary continued with a lightweight public HTML scan. ${summarizeError(
+      browserFailure,
+    )}`,
+  ];
+
+  if (productUrl) {
+    try {
+      productPage = await fetchPageSignals(productUrl);
+    } catch (error) {
+      warnings.push(
+        `Product page text scan failed, so the audit continued with homepage signals only. ${summarizeError(
+          error,
+        )}`,
+      );
+    }
+  }
+
+  return {
+    normalizedUrl,
+    auditMode: productPage ? "Form + homepage + product page" : "Form + homepage",
+    homepage,
+    productPage,
+    screenshots: {},
+    warnings,
+  };
+}
+
 async function launchBrowser(): Promise<BrowserLike> {
   const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
@@ -106,6 +143,7 @@ async function launchBrowser(): Promise<BrowserLike> {
       import("@sparticuz/chromium"),
     ]);
     const chromium = chromiumModule.default;
+    chromium.setGraphicsMode = false;
 
     return playwrightChromium.launch({
       args: [...chromium.args, "--disable-dev-shm-usage"],
@@ -120,6 +158,145 @@ async function launchBrowser(): Promise<BrowserLike> {
     headless: true,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   }) as Promise<BrowserLike>;
+}
+
+async function fetchPageSignals(url: string): Promise<PageSignals> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TEXT_SCAN_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; CartCanaryAudit/1.0; +https://cartcanary.com)",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/html")) {
+      throw new Error("The URL did not return an HTML page.");
+    }
+
+    const finalUrl = response.url || url;
+    const html = await response.text();
+    return extractSignalsFromHtml(html, finalUrl);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function extractSignalsFromHtml(html: string, currentUrl: string): PageSignals {
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
+  const visibleText = decodeHtmlEntities(withoutScripts.replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+  const lowerText = visibleText.toLowerCase();
+  const links = extractLinks(html, currentUrl);
+  const sameHostLinks = links.filter((link) => {
+    try {
+      return new URL(link).host === new URL(currentUrl).host;
+    } catch {
+      return false;
+    }
+  });
+  const byPattern = (patterns: RegExp[]) =>
+    sameHostLinks.filter((link) => patterns.some((pattern) => pattern.test(link)));
+
+  return {
+    url: currentUrl,
+    pageTitle: firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i),
+    metaDescription: firstMatch(
+      html,
+      /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["'][^>]*>/i,
+    ),
+    headings: extractTagText(html, /<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi, 12),
+    ctaTexts: extractTagText(html, /<(?:a|button)[^>]*>([\s\S]*?)<\/(?:a|button)>/gi, 24),
+    bodyTextSample: visibleText.slice(0, 1800),
+    internalLinks: sameHostLinks.slice(0, MAX_LINKS),
+    productLikeLinks: byPattern([
+      /\/products?\//i,
+      /\/product\//i,
+      /\/items?\//i,
+      /\/shop\//i,
+    ]).slice(0, MAX_LINKS),
+    collectionLikeLinks: byPattern([
+      /\/collections?\//i,
+      /\/categories?\//i,
+      /\/shop/i,
+    ]).slice(0, MAX_LINKS),
+    cartLikeLinks: byPattern([/\/cart/i, /basket/i, /bag/i]).slice(0, MAX_LINKS),
+    checkoutLikeLinks: byPattern([/checkout/i]).slice(0, MAX_LINKS),
+    mentions: {
+      shipping: /shipping/.test(lowerText),
+      returns: /returns?|refunds?/.test(lowerText),
+      guarantees: /guarantee|warranty/.test(lowerText),
+      reviews: /reviews?|ratings?/.test(lowerText),
+      testimonials: /testimonials?/.test(lowerText),
+      secureCheckout: /secure checkout|safe checkout|ssl|secure payment/.test(lowerText),
+      paymentOptions: /paypal|klarna|afterpay|shop pay|apple pay|google pay|payment/.test(
+        lowerText,
+      ),
+      discounts: /discount|sale|save|promo|coupon/.test(lowerText),
+      subscriptions: /subscribe|subscription/.test(lowerText),
+      sizing: /size guide|sizing|size chart/.test(lowerText),
+      delivery: /delivery/.test(lowerText),
+      freeShipping: /free shipping/.test(lowerText),
+    },
+  };
+}
+
+function extractLinks(html: string, currentUrl: string) {
+  const links = Array.from(html.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>/gi))
+    .map((match) => {
+      try {
+        return new URL(decodeHtmlEntities(match[1]), currentUrl).toString();
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(links));
+}
+
+function extractTagText(html: string, pattern: RegExp, limit: number) {
+  return Array.from(html.matchAll(pattern))
+    .map((match) => decodeHtmlEntities(match[1].replace(/<[^>]+>/g, " ")))
+    .map((text) => text.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function firstMatch(html: string, pattern: RegExp) {
+  return decodeHtmlEntities(html.match(pattern)?.[1] ?? "").replace(/\s+/g, " ").trim();
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function summarizeError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "";
+  }
+
+  return error.message.split("\n")[0].slice(0, 220);
 }
 
 async function gotoWithTimeout(page: Page, url: string) {

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzePublicStore, normalizePublicUrl } from "@/lib/analyzePublicStore";
+import {
+  analyzePublicStore,
+  analyzePublicStoreTextOnly,
+  normalizePublicUrl,
+} from "@/lib/analyzePublicStore";
 import { generateAuditReport } from "@/lib/generateAuditReport";
 import { generateFallbackReport } from "@/lib/generateFallbackReport";
 import {
@@ -32,13 +36,24 @@ export async function POST(request: NextRequest) {
         "Public page scan timed out. CartCanary continued with a form-only fallback report.",
       );
     } catch (error) {
-      scanFailure = friendlyScanFailure(error);
-      analysis = {
-        normalizedUrl,
-        auditMode: "Form-only fallback" as const,
-        screenshots: {},
-        warnings: [scanFailure],
-      };
+      console.warn("CartCanary browser scan failed", sanitizeErrorForLogs(error));
+
+      try {
+        analysis = await withTimeout(
+          analyzePublicStoreTextOnly(normalizedUrl, error),
+          AUDIT_TIMEOUT_MS,
+          "Public page text scan timed out.",
+        );
+      } catch (textScanError) {
+        console.warn("CartCanary text scan failed", sanitizeErrorForLogs(textScanError));
+        scanFailure = friendlyScanFailure(textScanError);
+        analysis = {
+          normalizedUrl,
+          auditMode: "Form-only fallback" as const,
+          screenshots: {},
+          warnings: [scanFailure],
+        };
+      }
     }
 
     const generated = scanFailure
@@ -72,6 +87,17 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+}
+
+function sanitizeErrorForLogs(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "Unknown error";
+  }
+
+  return {
+    name: error.name,
+    message: error.message.split("\n")[0].slice(0, 500),
+  };
 }
 
 function friendlyScanFailure(error: unknown) {
