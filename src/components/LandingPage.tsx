@@ -13,7 +13,7 @@ export function LandingPage({ onStart }: LandingPageProps) {
       step: "1",
       title: "Enter your store details",
       copy: "Tell us about your store, traffic, revenue, platform, and biggest concern.",
-      image: "/brand/mascot-cart-small.png",
+      image: "/brand/mascot-shopping-cart-step.png",
       alt: "CartCanary mascot riding in a shopping cart",
     },
     {
