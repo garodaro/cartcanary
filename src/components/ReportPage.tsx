@@ -43,7 +43,7 @@ export function ReportPage({
             className="mt-1 rounded-2xl outline-none transition hover:-translate-y-0.5 focus:ring-4 focus:ring-blue-100"
           >
             <Image
-              src="/brand/cartcanary-icon.png"
+              src="/brand/cartcanary-favicon-head.png"
               alt="CartCanary icon"
               width={56}
               height={56}

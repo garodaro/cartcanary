@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-const mascotPath = "/brand/cartcanary-icon.png";
+const mascotPath = "/brand/cartcanary-favicon-head.png";
 const heroMascotPath = "/brand/mascot-clipboard.png";
 
 export function ConversionSnapshotCard() {
