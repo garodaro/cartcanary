@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7fbfb;
+  --foreground: #102033;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(30, 144, 255, 0.12), transparent 30rem),
+    linear-gradient(180deg, #f7fbfb 0%, #ffffff 42%, #f4faf8 100%);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.cartcanary-loader {
+  position: relative;
+  height: 14.25rem;
+  overflow: visible;
+}
+
+.cartcanary-loader__cart {
+  position: absolute;
+  left: 50%;
+  bottom: 0.82rem;
+  z-index: 2;
+  width: 10.25rem;
+  height: auto;
+  transform: translateX(-50%);
+  object-fit: contain;
+  animation: cartcanary-cart-bob 1.45s ease-in-out infinite;
+  filter: drop-shadow(0 1rem 1rem rgba(15, 23, 42, 0.16));
+}
+
+.cartcanary-loader__light {
+  position: absolute;
+  left: calc(50% + 0.55rem);
+  top: 0.08rem;
+  z-index: 3;
+  width: 3.8rem;
+  height: 3.8rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 14%, rgba(254, 240, 138, 0.82) 15% 27%, rgba(250, 204, 21, 0.34) 42%, transparent 72%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  transform: translateX(-50%) scale(0.82);
+  animation: cartcanary-light-pulse 1.55s ease-in-out infinite;
+}
+
+.cartcanary-loader__light::after {
+  position: absolute;
+  top: 50%;
+  left: 58%;
+  width: 5.25rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(254, 240, 138, 0.72), rgba(250, 204, 21, 0));
+  content: "";
+  filter: blur(0.2rem);
+  transform: translateY(-50%);
+}
+
+.cartcanary-loader__track {
+  position: absolute;
+  right: 1.35rem;
+  bottom: 0.12rem;
+  left: 1.35rem;
+  height: 2.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  transform: perspective(9rem) rotateX(54deg);
+  transform-origin: center bottom;
+}
+
+.cartcanary-loader__track::before {
+  position: absolute;
+  inset: 0.15rem 0.7rem 0.15rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.1), transparent);
+  content: "";
+  filter: blur(0.35rem);
+}
+
+.cartcanary-loader__rail {
+  position: absolute;
+  right: 0.35rem;
+  left: 0.35rem;
+  height: 0.18rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.22), #111827 12%, #64748b 50%, #111827 88%, rgba(15, 23, 42, 0.22));
+  box-shadow:
+    0 0.08rem 0 rgba(255, 255, 255, 0.42) inset,
+    0 0.26rem 0.5rem rgba(15, 23, 42, 0.14);
+}
+
+.cartcanary-loader__rail--top {
+  top: 0.58rem;
+}
+
+.cartcanary-loader__rail--bottom {
+  top: 1.38rem;
+}
+
+.cartcanary-loader__ties {
+  position: absolute;
+  inset: 0.18rem -3rem 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 0.9rem,
+      rgba(117, 75, 36, 0.92) 0.9rem,
+      rgba(117, 75, 36, 0.92) 1.28rem,
+      transparent 1.28rem,
+      transparent 2.35rem
+    );
+  opacity: 0.86;
+  transform: skewX(-11deg);
+  animation: cartcanary-track-scroll 0.55s linear infinite;
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+
+@keyframes cartcanary-cart-bob {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-0.35rem);
+  }
+}
+
+@keyframes cartcanary-track-scroll {
+  from {
+    background-position-x: 0;
+  }
+
+  to {
+    background-position-x: -2.35rem;
+  }
+}
+
+@keyframes cartcanary-light-pulse {
+  0%,
+  100% {
+    opacity: 0.08;
+    transform: translateX(-50%) scale(0.72);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartcanary-loader__cart,
+  .cartcanary-loader__ties,
+  .cartcanary-loader__light {
+    animation: none;
+  }
+}
