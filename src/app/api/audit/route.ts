@@ -11,6 +11,7 @@ import {
 } from "@/lib/reportLogic";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const AUDIT_TIMEOUT_MS = 30000;
 

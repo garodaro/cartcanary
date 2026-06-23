@@ -1,8 +1,16 @@
-import { chromium, Page } from "playwright";
+import type { Page } from "playwright-core";
 import { PageAnalysisResult, PageSignals, ScreenshotSet } from "@/lib/reportLogic";
 
 const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_LINKS = 24;
+
+type BrowserLike = {
+  newContext: (...args: unknown[]) => Promise<{
+    newPage: () => Promise<Page>;
+    close: () => Promise<void>;
+  }>;
+  close: () => Promise<void>;
+};
 
 export function normalizePublicUrl(rawUrl: string) {
   const withProtocol = /^https?:\/\//i.test(rawUrl.trim())
@@ -22,13 +30,10 @@ export async function analyzePublicStore(rawUrl: string): Promise<PageAnalysisRe
   const normalizedUrl = normalizePublicUrl(rawUrl);
   const screenshots: ScreenshotSet = {};
   const warnings: string[] = [];
-  let browser;
+  let browser: BrowserLike | undefined;
 
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-dev-shm-usage"],
-    });
+    browser = await launchBrowser();
 
     const desktopContext = await browser.newContext({
       viewport: { width: 1440, height: 1050 },
@@ -90,6 +95,31 @@ export async function analyzePublicStore(rawUrl: string): Promise<PageAnalysisRe
       await browser.close();
     }
   }
+}
+
+async function launchBrowser(): Promise<BrowserLike> {
+  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+  if (isServerless) {
+    const [{ chromium: playwrightChromium }, chromiumModule] = await Promise.all([
+      import("playwright-core"),
+      import("@sparticuz/chromium"),
+    ]);
+    const chromium = chromiumModule.default;
+
+    return playwrightChromium.launch({
+      args: [...chromium.args, "--disable-dev-shm-usage"],
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    }) as Promise<BrowserLike>;
+  }
+
+  const { chromium } = await import("playwright");
+
+  return chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  }) as Promise<BrowserLike>;
 }
 
 async function gotoWithTimeout(page: Page, url: string) {
