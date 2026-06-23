@@ -15,6 +15,8 @@ export function LandingPage({ onStart }: LandingPageProps) {
       copy: "Tell us about your store, traffic, revenue, platform, and biggest concern.",
       image: "/brand/mascot-shopping-cart-step-transparent.png",
       alt: "CartCanary mascot riding in a shopping cart",
+      imageClassName:
+        "bottom-2 right-2 h-36 w-36 sm:bottom-1 sm:right-2 sm:h-40 sm:w-40",
     },
     {
       step: "2",
@@ -22,6 +24,7 @@ export function LandingPage({ onStart }: LandingPageProps) {
       copy: "We scan your public site experience and combine it with practical CRO logic.",
       image: "/brand/mascot-magnifier.png",
       alt: "CartCanary mascot holding a magnifying glass",
+      imageClassName: "bottom-4 right-4 h-28 w-28 sm:h-32 sm:w-32",
     },
     {
       step: "3",
@@ -29,6 +32,7 @@ export function LandingPage({ onStart }: LandingPageProps) {
       copy: "Receive a clear report with what to fix, test, or investigate and why.",
       image: "/brand/mascot-clipboard.png",
       alt: "CartCanary mascot holding a checklist",
+      imageClassName: "bottom-4 right-4 h-28 w-28 sm:h-32 sm:w-32",
     },
   ];
 
@@ -188,7 +192,7 @@ export function LandingPage({ onStart }: LandingPageProps) {
             Get your conversion roadmap in 3 simple steps
           </h2>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {howItWorksSteps.map(({ step, title, copy, image, alt }) => (
+            {howItWorksSteps.map(({ step, title, copy, image, alt, imageClassName }) => (
               <article
                 key={step}
                 className="relative min-h-[18rem] overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 pb-28 shadow-lg shadow-slate-950/5"
@@ -205,9 +209,9 @@ export function LandingPage({ onStart }: LandingPageProps) {
                 <Image
                   src={image}
                   alt={alt}
-                  width={124}
-                  height={124}
-                  className="pointer-events-none absolute bottom-4 right-4 h-24 w-24 object-contain sm:h-28 sm:w-28"
+                  width={176}
+                  height={176}
+                  className={`pointer-events-none absolute object-contain ${imageClassName}`}
                 />
               </article>
             ))}
