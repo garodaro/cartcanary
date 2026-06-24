@@ -10,9 +10,11 @@ import {
   AuditFormData,
   businessTypes,
   calculateMetrics,
+  CalculatedMetrics,
   mainConcerns,
   platforms,
 } from "@/lib/reportLogic";
+import { expertContactEmail } from "@/lib/contactLogic";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -68,6 +70,20 @@ export async function POST(request: NextRequest) {
         }
       : await generateAuditReport({ formData, metrics, analysis });
 
+    if (formData.email) {
+      try {
+        await sendAuditLeadNotification({
+          formData,
+          metrics,
+          normalizedUrl,
+          auditMode: analysis.auditMode,
+          overallScore: generated.report.overallScore,
+        });
+      } catch (leadEmailError) {
+        console.warn("CartCanary audit lead email failed", sanitizeErrorForLogs(leadEmailError));
+      }
+    }
+
     return NextResponse.json({
       formData,
       normalizedUrl,
@@ -87,6 +103,99 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+}
+
+async function sendAuditLeadNotification({
+  formData,
+  metrics,
+  normalizedUrl,
+  auditMode,
+  overallScore,
+}: {
+  formData: AuditFormData;
+  metrics: CalculatedMetrics;
+  normalizedUrl: string;
+  auditMode: string;
+  overallScore: number;
+}) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+
+  if (!resendApiKey) {
+    console.info("CartCanary audit lead email skipped", { reason: "resend-not-configured" });
+    return;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL ?? "CartCanary <onboarding@resend.dev>",
+      to: [process.env.RESEND_TO_EMAIL ?? expertContactEmail],
+      reply_to: formData.email,
+      subject: `New CartCanary audit lead: ${formData.storeName}`,
+      text: buildAuditLeadEmailBody({
+        formData,
+        metrics,
+        normalizedUrl,
+        auditMode,
+        overallScore,
+      }),
+    }),
+  });
+
+  if (!response.ok) {
+    const responseText = await response.text();
+    console.warn("CartCanary audit lead email failed", {
+      status: response.status,
+      body: sanitizeProviderMessage(responseText),
+    });
+  }
+}
+
+function buildAuditLeadEmailBody({
+  formData,
+  metrics,
+  normalizedUrl,
+  auditMode,
+  overallScore,
+}: {
+  formData: AuditFormData;
+  metrics: CalculatedMetrics;
+  normalizedUrl: string;
+  auditMode: string;
+  overallScore: number;
+}) {
+  return [
+    "A visitor submitted a CartCanary audit and requested future follow-up.",
+    "",
+    `Email: ${formData.email}`,
+    `Store name: ${formData.storeName}`,
+    `Store URL: ${normalizedUrl}`,
+    `Platform: ${formData.platform}`,
+    `Business type: ${formData.businessType}`,
+    `Main concern: ${formData.mainConcern}`,
+    "",
+    `Monthly sessions: ${metrics.monthlySessions}`,
+    `Monthly orders: ${metrics.monthlyOrders}`,
+    `Average order value: ${metrics.averageOrderValue}`,
+    `Calculated conversion rate: ${(metrics.conversionRate * 100).toFixed(2)}%`,
+    `Estimated monthly revenue: $${metrics.estimatedMonthlyRevenue.toFixed(0)}`,
+    `Estimated 10% conversion lift value: $${metrics.incrementalMonthlyRevenue.toFixed(0)}`,
+    `A/B test feasibility: ${metrics.abTestFeasibility}`,
+    "",
+    `Audit mode: ${auditMode}`,
+    `Overall score: ${overallScore}/100`,
+  ].join("\n");
+}
+
+function sanitizeProviderMessage(value: string) {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/token[^",\s]*/gi, "token[redacted]")
+    .slice(0, 600);
 }
 
 function sanitizeErrorForLogs(error: unknown) {

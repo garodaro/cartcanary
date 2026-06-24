@@ -214,6 +214,7 @@ function buildPrompt({
   metrics: CalculatedMetrics;
   analysis: PageAnalysisResult;
 }) {
+  const { email: _email, ...formDataForReport } = formData;
   const safeAnalysis = {
     auditMode: analysis.auditMode,
     normalizedUrl: analysis.normalizedUrl,
@@ -245,7 +246,7 @@ Rules:
 - Use concise plain English for ecommerce teams.
 
 Submitted form data:
-${JSON.stringify(formData, null, 2)}
+${JSON.stringify(formDataForReport, null, 2)}
 
 Calculated metrics:
 ${JSON.stringify(metrics, null, 2)}
