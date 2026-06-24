@@ -138,6 +138,15 @@ async function launchBrowser(): Promise<BrowserLike> {
   const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
   if (isServerless) {
+    const browserlessUrl = getBrowserlessWebSocketUrl();
+
+    if (browserlessUrl) {
+      const { chromium } = await import("playwright-core");
+      return chromium.connectOverCDP(browserlessUrl) as Promise<BrowserLike>;
+    }
+  }
+
+  if (isServerless) {
     const [{ chromium: playwrightChromium }, chromiumModule] = await Promise.all([
       import("playwright-core"),
       import("@sparticuz/chromium"),
@@ -158,6 +167,19 @@ async function launchBrowser(): Promise<BrowserLike> {
     headless: true,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   }) as Promise<BrowserLike>;
+}
+
+function getBrowserlessWebSocketUrl() {
+  if (process.env.BROWSERLESS_WS_URL) {
+    return process.env.BROWSERLESS_WS_URL;
+  }
+
+  if (!process.env.BROWSERLESS_TOKEN) {
+    return "";
+  }
+
+  const region = process.env.BROWSERLESS_REGION ?? "production-sfo";
+  return `wss://${region}.browserless.io?token=${process.env.BROWSERLESS_TOKEN}`;
 }
 
 async function fetchPageSignals(url: string): Promise<PageSignals> {
