@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         from: process.env.RESEND_FROM_EMAIL ?? "CartCanary <onboarding@resend.dev>",
-        to: [expertContactEmail],
+        to: [process.env.RESEND_TO_EMAIL ?? expertContactEmail],
         reply_to: payload.email,
         subject: expertContactSubject,
         text: buildExpertContactEmailBody(payload),
@@ -52,6 +52,12 @@ export async function POST(request: Request) {
     });
 
     if (!resendResponse.ok) {
+      const responseText = await resendResponse.text();
+      console.warn("CartCanary contact email failed", {
+        status: resendResponse.status,
+        body: sanitizeProviderMessage(responseText),
+      });
+
       return NextResponse.json<ContactResponse>(
         {
           error: "CartCanary could not send this request right now. You can still send it by email.",
@@ -72,6 +78,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+function sanitizeProviderMessage(value: string) {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/token[^",\s]*/gi, "token[redacted]")
+    .slice(0, 600);
 }
 
 function normalizePayload(value: unknown): ExpertContactPayload {

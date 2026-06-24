@@ -142,6 +142,7 @@ async function launchBrowser(): Promise<BrowserLike> {
 
     if (browserlessUrl) {
       const { chromium } = await import("playwright-core");
+      console.info("CartCanary screenshot browser provider", { provider: "browserless" });
       return chromium.connectOverCDP(browserlessUrl) as Promise<BrowserLike>;
     }
   }
@@ -153,6 +154,7 @@ async function launchBrowser(): Promise<BrowserLike> {
     ]);
     const chromium = chromiumModule.default;
     chromium.setGraphicsMode = false;
+    console.info("CartCanary screenshot browser provider", { provider: "serverless-chromium" });
 
     return playwrightChromium.launch({
       args: [...chromium.args, "--disable-dev-shm-usage"],
@@ -162,6 +164,7 @@ async function launchBrowser(): Promise<BrowserLike> {
   }
 
   const { chromium } = await import("playwright");
+  console.info("CartCanary screenshot browser provider", { provider: "local-playwright" });
 
   return chromium.launch({
     headless: true,
